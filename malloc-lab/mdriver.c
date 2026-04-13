@@ -242,6 +242,9 @@ int main(int argc, char **argv)
 		}
 		else if (*team.name2 != '\0')
 			printf("Member 2 :%s:%s\n", team.name2, team.id2);
+		
+		if (*team.name3 != '\0')
+			printf("Member 3 :%s:%s\n", team.name3, team.id3);
 	}
 
 	/*
