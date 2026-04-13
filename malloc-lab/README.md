@@ -50,3 +50,12 @@ To get a list of the driver flags:
 
 	unix> mdriver -h
 
+Options
+        -a         Don't check the team structure.
+        -f <file>  Use <file> as the trace file.
+        -g         Generate summary info for autograder.
+        -h         Print help message.
+        -l         Run libc malloc as well.
+        -t <dir>   Directory to find default traces.
+        -v         Print per-trace performance breakdowns.
+        -V         Print additional debug info.
