@@ -18,6 +18,11 @@
 #include "mm.h"
 #include "memlib.h"
 
+static void *extend_heap(size_t words);
+static void *coalesce(void *bp);
+static void *find_fit(size_t newsize);
+static void place(void *bp, size_t newsize);
+
 /*********************************************************
  * NOTE TO STUDENTS: Before you do anything else, please
  * provide your team information in the following struct.
@@ -51,9 +56,9 @@ team_t team = {
 // #define DEFERRED_COALESCING // 지연 연결
 
 /********** 배치 방식 정의 **********/
-#define FIRSTFIT // 최초 적합
+// #define FIRSTFIT // 최초 적합
 // #define NEXTFIT // 다음 적합
-// #define BESTFIT // 최적 적합
+#define BESTFIT // 최적 적합
 
 
 /* single word (4) or double word (8) alignment */
@@ -323,6 +328,28 @@ static void* find_fit(size_t newsize) {
 #endif
 
 #ifdef BESTFIT
+	void* bp;  // 힙의 블럭 순회를 위한 포인터
+	bp = heap_listp;
+
+    void *best_bp = NULL;
+
+	while (GET_SIZE(HDRP(bp)) > 0) {
+		if (!GET_ALLOC(HDRP(bp))) { // 미할당 상태면서
+
+			if (GET_SIZE(HDRP(bp)) == newsize)	// 딱 필요한 사이즈라면
+				return bp;	// 찾은 블럭의 페이로드 시작 주소 반환
+			else if (GET_SIZE(HDRP(bp)) >= newsize && best_bp == NULL)
+				best_bp = bp;
+			else if (GET_SIZE(HDRP(bp)) >= newsize && GET_SIZE(best_bp) > GET_SIZE(HDRP(bp)))
+				best_bp = bp;
+		}
+		bp = NEXT_BLKP(bp);
+	}
+    if (best_bp != NULL)
+        return best_bp;
+    
+	return NULL;  // 찾지 못한 경우
+
 #endif
 }
 
