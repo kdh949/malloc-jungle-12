@@ -51,15 +51,23 @@ team_t team = {
  * 지연 연결 >> (+): 병합 빈도를 줄여 free 연산 자체 오버헤드 감소 || (-): 외부 단편화 일시적 증가
  */
 
-/********** 연결 시점 정의 **********/
+/********** 연결(coalesce) 시점 정의 **********/
 #define IMMEDIATE_COALESCING // 즉시 연결
 // #define DEFERRED_COALESCING // 지연 연결
 
-/********** 배치 방식 정의 **********/
+/********** 배치(place) 방식 정의 **********/
 // #define FIRSTFIT // 최초 적합
-// #define NEXTFIT // 다음 적합
-#define BESTFIT // 최적 적합
+#define NEXTFIT // 다음 적합
+// #define BESTFIT // 최적 적합
 
+#ifdef NEXTFIT
+static void *last_bp = NULL;
+#endif
+
+
+/********** 재할당(reAlloc) 방식 정의 **********/
+#define DEFAULT_REALLOC // 기본 제공 코드
+// #define NEW_REALLOC
 
 /* single word (4) or double word (8) alignment */
 #define SINGLEWORD 4
@@ -145,7 +153,11 @@ int mm_init(void) {
     /* 에필로그(Epilogue): Coalescing 할 때, 다음 블록의 경계선 설정. 다음 블록을 참조할 때 힙 영역을 벗어나는 것을 방지함 */
 	PUT(heap_listp + (3 * WSIZE), PACK(0, 1));	// 1워드 헤더
 
-	heap_listp += (2 * WSIZE); // 힙의 시작 위치를 패딩과 프롤로그 헤더 다음으로 설정
+	heap_listp += (2 * WSIZE); // 힙의 시작 위치를 패딩과 프롤로그 헤더 다음으로 설정 (첫 번째 블럭 페이로드)
+
+#ifdef NEXTFIT //Next fit 배치 방식 사용시 사용
+    last_bp = heap_listp;
+#endif
 
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL) // CHUNKSIZE를 워드로 변환(CHUNKSIZE/WSIZE) 후 힙 확장 요청. 확장된 힙에는 헤더와 푸더가 있고, 페이로드를 가리키는 포인터가 반환됨
         return -1; // 할당에 실패한 경우 -1 반환
@@ -260,8 +272,18 @@ static void *coalesce(void *bp){
         //블럭 포인터의 위치를 이전 블럭의 페이로드 시작점으로 바꿈
         bp = PREV_BLKP(bp);
 	}
-    
-    return bp; //CASE 2, 3, 4 처리 후 변경된 bp 반환
+#ifdef NEXTFIT
+	/* Codex 의견: last_bp는 payload 포인터이므로, 비교도 bp와 NEXT_BLKP(bp)처럼 payload 기준으로 하는 게 자연스럽습니다.
+     * 지금처럼 HDRP(bp)와 FTRP(bp)를 쓰면 “헤더~푸터 사이”를 보는 셈이라 개념상 조금 덜 직관적입니다.
+     * char *로 캐스팅해 비교하는 쪽이 포인터 범위 비교 의도가 더 분명합니다.
+     */
+    // if (HDRP(bp) < last_bp && last_bp < FTRP(bp)) {  // 합치려는 블록이 NEXTFIT으로 최근에 배치했던 위치인 경우
+	if ((char*)bp <= (char*)last_bp && (char*)last_bp < (char*)NEXT_BLKP(bp)) {
+		last_bp = bp;
+	}
+#endif
+
+	return bp; //CASE 2, 3, 4 처리 후 변경된 bp 반환
 }
 
 /*
@@ -269,8 +291,7 @@ static void *coalesce(void *bp){
  *     Always allocate a block whose size is a multiple of the alignment.
  */
 void *mm_malloc(size_t size) 
-{ //TODO: 실제 malloc 라이브러리의 결과와 비교하기~
-
+{ 
 #ifdef DEFERRED_COALESCING
 	// TODO: 메모리 할당시 연결 방식 구현
 #endif
@@ -325,6 +346,23 @@ static void* find_fit(size_t newsize) {
 #endif
 
 #ifdef NEXTFIT
+    void *bp = last_bp; // 힙의 블럭 순회를 위한 포인터
+    void *start_bp = bp;
+
+	do {
+		if (!GET_ALLOC(HDRP(bp)) && (GET_SIZE(HDRP(bp)) >= newsize)) {
+			last_bp = bp;
+			return bp;	// 찾은 블럭의 페이로드 시작 주소 반환
+		}
+
+		bp = NEXT_BLKP(bp);
+		if (GET_SIZE(HDRP(bp)) == 0) {	// 에필로그 블럭을 만난 경우
+			bp = heap_listp;	 // 힙의 첫 번째 페이로드
+		}
+	} while (bp != start_bp);
+
+	return NULL;
+
 #endif
 
 #ifdef BESTFIT
@@ -340,7 +378,7 @@ static void* find_fit(size_t newsize) {
 				return bp;	// 찾은 블럭의 페이로드 시작 주소 반환
 			else if (GET_SIZE(HDRP(bp)) >= newsize && best_bp == NULL)
 				best_bp = bp;
-			else if (GET_SIZE(HDRP(bp)) >= newsize && GET_SIZE(best_bp) > GET_SIZE(HDRP(bp)))
+			else if (GET_SIZE(HDRP(bp)) >= newsize && GET_SIZE(HDRP(best_bp)) > GET_SIZE(HDRP(bp)))
 				best_bp = bp;
 		}
 		bp = NEXT_BLKP(bp);
@@ -386,21 +424,56 @@ static void place(void *bp, size_t newsize) {
 
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - 동적 메모리 재할당 (크기를 늘리거나 줄임)
  */
-void *mm_realloc(void *ptr, size_t size)
+void *mm_realloc(void *bp, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
+#ifdef DEFAULT_REALLOC
+	void* oldptr = bp;
+	void* newptr;
+	size_t copySize;
 
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-        return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-        copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
+	newptr = mm_malloc(size);
+	if (newptr == NULL) return NULL;
+	copySize = *(size_t*)((char*)oldptr - SIZE_T_SIZE);
+	if (size < copySize) copySize = size;
+	memcpy(newptr, oldptr, copySize);
+	mm_free(oldptr);
+	return newptr;
+
+#endif
+
+#ifdef NEW_REALLOC
+	void *old_bp = bp;
+    void *new_bp;
+    size_t curr_blockSize;
+
+    curr_blockSize = GET_SIZE(bp) - DSIZE;
+
+	if (curr_blockSize > size) { // 요청한 크기가 기존에 비해 줄어들었다면
+		place(bp, size); //블럭 분할이 가능한지 place 함수로 확인
+        return bp;
+	}
+
+	/* 이전 블럭이 미할당 상태이고, 이전, 현재 블럭 모두 더한 값이 size 보다 크거나 같으면 연결 */
+	if (!GET_ALLOC(PREV_BLKP(HDRP(bp))) &&
+		(((GET_SIZE(HDRP(PREV_BLKP(bp))) - DSIZE) + curr_blockSize >= size))) {
+            /* TODO: 이전+현재 블럭 합치기 */
+	}
+    
+	/* 다음 블럭이 미할당 상태이고, 현재, 다음 블럭 모두 더한 값이 size 보다 크거나 같으면 연결 */
+    else if (!GET_ALLOC(NEXT_HDRP(bp)) && curr_blockSize + GET_SIZE(NEXT_HDRP(bp))- DSIZE >= size){
+            /* TODO: 현재+다음 블럭 합치기 */
+    }
+
+	/* 이전, 다음 블럭이 모두 미할당 상태이고, 이전, 현재, 다음 블럭 모두 더한 값이 size 보다 크거나 같으면 연결 */
+	else if (!(GET_ALLOC(PREV_BLKP(HDRP(bp))) || GET_ALLOC(NEXT_HDRP(bp))) &&
+			 (curr_blockSize + (GET_SIZE(HDRP(PREV_BLKP(bp))) - DSIZE) +
+				  (GET_SIZE(NEXT_HDRP(bp)) - DSIZE) >= size)) {
+                    /* TODO: 이전+현재+다음 블럭 합치기 */
+	}
+
+	mm_free(oldptr);
     return newptr;
+#endif
 }
