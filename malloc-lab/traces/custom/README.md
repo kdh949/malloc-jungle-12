@@ -38,8 +38,11 @@
 | `coalesce-4cases-bal.rep` | fragmentation | 이전/다음 블록 상태 4조합에서 coalescing을 유도 | `./mdriver -V -l -f traces/custom/valid/coalesce-4cases-bal.rep` | pass | hand-crafted |
 | `fragment-split-reuse-bal.rep` | fragmentation | 큰 free block을 여러 작은 요청이 분할 재사용하는지 확인 | `./mdriver -V -l -f traces/custom/valid/fragment-split-reuse-bal.rep` | pass | hand-crafted |
 | `fragment-hole-fill-bal.rep` | fragmentation | 교차 해제로 만든 hole을 유사 크기 요청으로 다시 채우기 | `./mdriver -V -l -f traces/custom/valid/fragment-hole-fill-bal.rep` | pass | hand-crafted |
+| `exact-fit-reuse-bal.rep` | fragmentation | free block과 같은 크기의 요청을 다시 넣어 exact fit 재사용을 확인 | `./mdriver -V -l -f traces/custom/valid/exact-fit-reuse-bal.rep` | pass | hand-crafted |
 | `realloc-grow-shrink-bal.rep` | realloc | 단일 블록 grow/shrink 시나리오와 bookkeeping을 확인 | `./mdriver -V -l -f traces/custom/valid/realloc-grow-shrink-bal.rep` | pass | hand-crafted |
 | `realloc-interleaved-preserve-bal.rep` | realloc | 여러 ID의 교차 realloc과 데이터 보존을 압박 | `./mdriver -V -l -f traces/custom/valid/realloc-interleaved-preserve-bal.rep` | pass | hand-crafted |
+| `realloc-neighbor-grow-bal.rep` | realloc | 인접 free block이 있을 때 realloc grow가 어떻게 처리되는지 확인 | `./mdriver -V -l -f traces/custom/valid/realloc-neighbor-grow-bal.rep` | pass | hand-crafted |
+| `realloc-same-size-bal.rep` | realloc | 같은 크기로 realloc하는 no-op 성격의 공통 패턴을 확인 | `./mdriver -V -l -f traces/custom/valid/realloc-same-size-bal.rep` | pass | hand-crafted |
 | `free-order-lifo-bal.rep` | fragmentation | 최근 free block이 먼저 재사용되는 패턴을 관찰 | `./mdriver -V -l -f traces/custom/valid/free-order-lifo-bal.rep` | pass | hand-crafted |
 | `free-order-fifo-bal.rep` | fragmentation | 오래된 free block이 남는 패턴을 관찰 | `./mdriver -V -l -f traces/custom/valid/free-order-fifo-bal.rep` | pass | hand-crafted |
 | `large-near-limit-bal.rep` | stress | live payload를 약 15.6 MiB까지 올려 `MAX_HEAP` 근처 대형 요청을 확인 | `./mdriver -V -l -f traces/custom/valid/large-near-limit-bal.rep` | pass | hand-crafted, near-limit |
