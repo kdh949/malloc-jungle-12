@@ -22,7 +22,29 @@
  * traces.
  */
 
+// 테스트 케이스 채점 방법
+#define DEFAULT_TESTCASE // malloc lab에서 제공한 케이스
+// #define CUSTOM_TESTCASE // 직접 테스트를 위해 추가한 케이스
+
 // custom/valid는 새롭게 추가한 케이스
+#ifdef DEFAULT_TESTCASE
+#define DEFAULT_TRACEFILES \
+  "amptjp-bal.rep",\
+  "short1-bal.rep",\
+  "short2-bal.rep",\
+  "cccp-bal.rep",\
+  "cp-decl-bal.rep",\
+  "expr-bal.rep",\
+  "coalescing-bal.rep",\
+  "random-bal.rep",\
+  "random2-bal.rep",\
+  "binary-bal.rep",\
+  "binary2-bal.rep",\
+  "realloc-bal.rep",\
+  "realloc2-bal.rep"
+#endif
+
+#ifdef CUSTOM_TESTCASE
 #define DEFAULT_TRACEFILES \
   "amptjp-bal.rep",\
   "short1-bal.rep",\
@@ -54,6 +76,7 @@
   "custom/valid/stress-fragment-wave-s67-bal.rep",\
   "custom/valid/stress-realloc-heavy-s79-bal.rep",\
   "custom/valid/stress-long-lived-s97-bal.rep"
+#endif
 
 /*
  * This constant gives the estimated performance of the libc malloc

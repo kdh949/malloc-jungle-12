@@ -56,9 +56,9 @@ team_t team = {
 // #define DEFERRED_COALESCING // 지연 연결
 
 /********** 배치 방식 정의 **********/
-// #define FIRSTFIT // 최초 적합
+#define FIRSTFIT // 최초 적합
 // #define NEXTFIT // 다음 적합
-#define BESTFIT // 최적 적합
+// #define BESTFIT // 최적 적합
 
 
 /* single word (4) or double word (8) alignment */
