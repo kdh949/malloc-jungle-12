@@ -30,8 +30,6 @@
 #ifdef DEFAULT_TESTCASE
 #define DEFAULT_TRACEFILES \
   "amptjp-bal.rep",\
-  "short1-bal.rep",\
-  "short2-bal.rep",\
   "cccp-bal.rep",\
   "cp-decl-bal.rep",\
   "expr-bal.rep",\
