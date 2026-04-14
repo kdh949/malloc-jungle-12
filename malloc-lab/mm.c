@@ -56,8 +56,8 @@ team_t team = {
 // #define DEFERRED_COALESCING // 지연 연결
 
 /********** 배치(place) 방식 정의 **********/
-// #define FIRSTFIT // 최초 적합
-#define NEXTFIT // 다음 적합
+#define FIRSTFIT // 최초 적합
+// #define NEXTFIT // 다음 적합
 // #define BESTFIT // 최적 적합
 
 #ifdef NEXTFIT
@@ -66,8 +66,8 @@ static void *last_bp = NULL;
 
 
 /********** 재할당(reAlloc) 방식 정의 **********/
-#define DEFAULT_REALLOC // 기본 제공 코드
-// #define NEW_REALLOC
+// #define DEFAULT_REALLOC // 기본 제공 코드
+#define NEW_REALLOC
 
 /* single word (4) or double word (8) alignment */
 #define SINGLEWORD 4
@@ -444,36 +444,93 @@ void *mm_realloc(void *bp, size_t size)
 #endif
 
 #ifdef NEW_REALLOC
-	void *old_bp = bp;
+    void *old_bp = bp;
     void *new_bp;
-    size_t curr_blockSize;
+    size_t old_block_size;   // 헤더+푸터 포함 전체 블록 크기
+    size_t old_payload_size; // 실제 복사해야 하는 payload 크기
+    size_t asize;            // mm_malloc과 동일 규칙으로 계산한 목표 블록 크기
 
-    curr_blockSize = GET_SIZE(bp) - DSIZE;
+    /* realloc(NULL, size) == malloc(size) */
+    if (bp == NULL)
+        return mm_malloc(size);
 
-	if (curr_blockSize > size) { // 요청한 크기가 기존에 비해 줄어들었다면
-		place(bp, size); //블럭 분할이 가능한지 place 함수로 확인
+    /* realloc(ptr, 0) == free(ptr), return NULL */
+    if (size == 0) {
+        mm_free(bp);
+        return NULL;
+    }
+
+    old_block_size = GET_SIZE(HDRP(bp));
+    old_payload_size = old_block_size - DSIZE;
+
+    /* mm_malloc과 같은 방식으로 크기를 정규화해야 place와 호환 가능 */
+    if (size <= DSIZE)
+        asize = 2 * DSIZE;
+    else
+        asize = ALIGN(size + DSIZE);
+
+    /* 이미 현재 블록만으로 충분하면, 필요 시 분할만 하고 그대로 반환 */
+    if (old_block_size >= asize) {
+        place(bp, asize);
         return bp;
-	}
+    }
 
 	/* 이전 블럭이 미할당 상태이고, 이전, 현재 블럭 모두 더한 값이 size 보다 크거나 같으면 연결 */
-	if (!GET_ALLOC(PREV_BLKP(HDRP(bp))) &&
-		(((GET_SIZE(HDRP(PREV_BLKP(bp))) - DSIZE) + curr_blockSize >= size))) {
-            /* TODO: 이전+현재 블럭 합치기 */
-	}
-    
+    if (!GET_ALLOC(PREV_FTRP(bp)) &&
+        GET_SIZE(HDRP(PREV_BLKP(bp))) + old_block_size >= asize) {
+        void *prev_bp = PREV_BLKP(bp);
+        size_t expanded_size = GET_SIZE(HDRP(prev_bp)) + old_block_size;
+
+        PUT(HDRP(prev_bp), PACK(expanded_size, 1));
+        PUT(FTRP(prev_bp), PACK(expanded_size, 1));
+
+        /* 겹칠 수 있으므로 memcpy가 아닌 memmove 사용 */
+        memmove(prev_bp, old_bp, old_payload_size);
+
+        place(prev_bp, asize);
+        return prev_bp;
+    }
+
+
 	/* 다음 블럭이 미할당 상태이고, 현재, 다음 블럭 모두 더한 값이 size 보다 크거나 같으면 연결 */
-    else if (!GET_ALLOC(NEXT_HDRP(bp)) && curr_blockSize + GET_SIZE(NEXT_HDRP(bp))- DSIZE >= size){
-            /* TODO: 현재+다음 블럭 합치기 */
+    if (!GET_ALLOC(NEXT_HDRP(bp)) &&
+        old_block_size + GET_SIZE(NEXT_HDRP(bp)) >= asize) {
+        size_t expanded_size = old_block_size + GET_SIZE(NEXT_HDRP(bp));
+
+        PUT(HDRP(bp), PACK(expanded_size, 1));
+        PUT(FTRP(bp), PACK(expanded_size, 1));
+
+        place(bp, asize);
+        return bp;
     }
 
 	/* 이전, 다음 블럭이 모두 미할당 상태이고, 이전, 현재, 다음 블럭 모두 더한 값이 size 보다 크거나 같으면 연결 */
-	else if (!(GET_ALLOC(PREV_BLKP(HDRP(bp))) || GET_ALLOC(NEXT_HDRP(bp))) &&
-			 (curr_blockSize + (GET_SIZE(HDRP(PREV_BLKP(bp))) - DSIZE) +
-				  (GET_SIZE(NEXT_HDRP(bp)) - DSIZE) >= size)) {
-                    /* TODO: 이전+현재+다음 블럭 합치기 */
-	}
+    if (!GET_ALLOC(PREV_FTRP(bp)) &&
+        !GET_ALLOC(NEXT_HDRP(bp)) &&
+        GET_SIZE(HDRP(PREV_BLKP(bp))) + old_block_size + GET_SIZE(NEXT_HDRP(bp)) >= asize) {
+        void *prev_bp = PREV_BLKP(bp);
+        void *next_bp = NEXT_BLKP(bp);
+        size_t expanded_size =
+            GET_SIZE(HDRP(prev_bp)) + old_block_size + GET_SIZE(HDRP(next_bp));
 
-	mm_free(oldptr);
-    return newptr;
+        PUT(HDRP(prev_bp), PACK(expanded_size, 1));
+        PUT(FTRP(next_bp), PACK(expanded_size, 1));
+
+        memmove(prev_bp, old_bp, old_payload_size);
+
+        place(prev_bp, asize);
+        return prev_bp;
+    }
+
+    /* 확장이 불가능한 케이스 > fallback */
+    new_bp = mm_malloc(size);
+    if (new_bp == NULL)
+        return NULL;
+
+    /* 새 요청 크기보다 기존 payload가 더 작을 수 있으므로 작은 쪽만 복사 */
+    memmove(new_bp, old_bp, (old_payload_size < size) ? old_payload_size : size);
+    mm_free(old_bp);
+
+    return new_bp;
 #endif
 }
