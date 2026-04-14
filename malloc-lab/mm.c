@@ -56,8 +56,8 @@ team_t team = {
 // #define DEFERRED_COALESCING // 지연 연결
 
 /********** 배치(place) 방식 정의 **********/
-#define FIRSTFIT // 최초 적합
-// #define NEXTFIT // 다음 적합
+// #define FIRSTFIT // 최초 적합
+#define NEXTFIT // 다음 적합
 // #define BESTFIT // 최적 적합
 
 #ifdef NEXTFIT
@@ -472,6 +472,9 @@ void *mm_realloc(void *bp, size_t size)
     /* 이미 현재 블록만으로 충분하면, 필요 시 분할만 하고 그대로 반환 */
     if (old_block_size >= asize) {
         place(bp, asize);
+#ifdef NEXTFIT
+        last_bp = bp;
+#endif
         return bp;
     }
 
@@ -488,6 +491,9 @@ void *mm_realloc(void *bp, size_t size)
         memmove(prev_bp, old_bp, old_payload_size);
 
         place(prev_bp, asize);
+#ifdef NEXTFIT
+        last_bp = prev_bp;
+#endif
         return prev_bp;
     }
 
@@ -501,6 +507,9 @@ void *mm_realloc(void *bp, size_t size)
         PUT(FTRP(bp), PACK(expanded_size, 1));
 
         place(bp, asize);
+#ifdef NEXTFIT
+        last_bp = bp;
+#endif
         return bp;
     }
 
@@ -519,6 +528,9 @@ void *mm_realloc(void *bp, size_t size)
         memmove(prev_bp, old_bp, old_payload_size);
 
         place(prev_bp, asize);
+#ifdef NEXTFIT
+        last_bp = prev_bp;
+#endif
         return prev_bp;
     }
 
@@ -531,6 +543,9 @@ void *mm_realloc(void *bp, size_t size)
     memmove(new_bp, old_bp, (old_payload_size < size) ? old_payload_size : size);
     mm_free(old_bp);
 
+#ifdef NEXTFIT
+    last_bp = new_bp;
+#endif
     return new_bp;
 #endif
 }
