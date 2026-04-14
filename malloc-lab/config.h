@@ -21,8 +21,12 @@
  * your students to implement realloc, you can delete the last two
  * traces.
  */
+
+// custom/valid는 새롭게 추가한 케이스
 #define DEFAULT_TRACEFILES \
   "amptjp-bal.rep",\
+  "short1-bal.rep",\
+  "short2-bal.rep",\
   "cccp-bal.rep",\
   "cp-decl-bal.rep",\
   "expr-bal.rep",\
@@ -32,7 +36,24 @@
   "binary-bal.rep",\
   "binary2-bal.rep",\
   "realloc-bal.rep",\
-  "realloc2-bal.rep"
+  "realloc2-bal.rep",\
+  "custom/valid/boundary-min-sizes-bal.rep",\ 
+  "custom/valid/boundary-chunksize-cross-bal.rep",\
+  "custom/valid/coalesce-4cases-bal.rep",\
+  "custom/valid/fragment-split-reuse-bal.rep",\
+  "custom/valid/fragment-hole-fill-bal.rep",\
+  "custom/valid/realloc-grow-shrink-bal.rep",\
+  "custom/valid/realloc-interleaved-preserve-bal.rep",\
+  "custom/valid/free-order-lifo-bal.rep",\
+  "custom/valid/free-order-fifo-bal.rep",\
+  "custom/valid/large-near-limit-bal.rep",\
+  "custom/valid/stress-random-s17-bal.rep",\
+  "custom/valid/stress-random-s29-bal.rep",\
+  "custom/valid/stress-bias-small-s41-bal.rep",\
+  "custom/valid/stress-bias-large-s53-bal.rep",\
+  "custom/valid/stress-fragment-wave-s67-bal.rep",\
+  "custom/valid/stress-realloc-heavy-s79-bal.rep",\
+  "custom/valid/stress-long-lived-s97-bal.rep"
 
 /*
  * This constant gives the estimated performance of the libc malloc

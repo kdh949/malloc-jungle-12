@@ -136,7 +136,7 @@ static double eval_mm_util(trace_t *trace, int tracenum, range_t **ranges);
 static void eval_mm_speed(void *ptr);
 
 /* Various helper routines */
-static void printresults(int n, stats_t *stats);
+static void printresults(int n, stats_t *stats, char **tracefiles);
 static void usage(void);
 static void unix_error(char *msg);
 static void malloc_error(int tracenum, int opnum, char *msg);
@@ -296,7 +296,7 @@ int main(int argc, char **argv)
 		if (verbose)
 		{
 			printf("\nResults for libc malloc:\n");
-			printresults(num_tracefiles, libc_stats);
+			printresults(num_tracefiles, libc_stats, tracefiles);
 		}
 	}
 
@@ -340,7 +340,7 @@ int main(int argc, char **argv)
 	if (verbose)
 	{
 		printf("\nResults for mm malloc:\n");
-		printresults(num_tracefiles, mm_stats);
+		printresults(num_tracefiles, mm_stats, tracefiles);
 		printf("\n");
 	}
 
@@ -971,7 +971,7 @@ static void eval_libc_speed(void *ptr)
 /*
  * printresults - prints a performance summary for some malloc package
  */
-static void printresults(int n, stats_t *stats)
+static void printresults(int n, stats_t *stats, char **tracefiles)
 {
 	int i;
 	double secs = 0;
@@ -979,39 +979,41 @@ static void printresults(int n, stats_t *stats)
 	double util = 0;
 
 	/* Print the individual results for each trace */
-	printf("%5s%7s %5s%8s%10s%6s\n",
-		   "trace", " valid", "util", "ops", "secs", "Kops");
+	printf("%5s%7s %5s%8s%12s%8s  %s\n",
+		   "trace", " valid", "util", "ops", "secs", "Kops", "tracefile");
 	for (i = 0; i < n; i++)
 	{
 		if (stats[i].valid)
 		{
-			printf("%2d%10s%5.0f%%%8.0f%10.6f%6.0f\n",
+			printf("%2d%10s%5.0f%%%8.0f%12.6f%8.0f  %s\n",
 				   i,
 				   "yes",
 				   stats[i].util * 100.0,
 				   stats[i].ops,
 				   stats[i].secs,
-				   (stats[i].ops / 1e3) / stats[i].secs);
+				   (stats[i].ops / 1e3) / stats[i].secs,
+				   tracefiles[i]);
 			secs += stats[i].secs;
 			ops += stats[i].ops;
 			util += stats[i].util;
 		}
 		else
 		{
-			printf("%2d%10s%6s%8s%10s%6s\n",
+			printf("%2d%10s%6s%8s%12s%8s  %s\n",
 				   i,
 				   "no",
 				   "-",
 				   "-",
 				   "-",
-				   "-");
+				   "-",
+				   tracefiles[i]);
 		}
 	}
 
 	/* Print the aggregate results for the set of traces */
 	if (errors == 0)
 	{
-		printf("%12s%5.0f%%%8.0f%10.6f%6.0f\n",
+		printf("%12s%5.0f%%%8.0f%12.6f%8.0f\n",
 			   "Total       ",
 			   (util / n) * 100.0,
 			   ops,
@@ -1020,7 +1022,7 @@ static void printresults(int n, stats_t *stats)
 	}
 	else
 	{
-		printf("%12s%6s%8s%10s%6s\n",
+		printf("%12s%6s%8s%12s%8s\n",
 			   "Total       ",
 			   "-",
 			   "-",
