@@ -1,13 +1,11 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
+ * mm.c - boundary tag를 기반으로 동작하는 malloc package.
  *
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
- *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
+ * 기본 경로는 implicit free list + immediate coalescing + first fit을 사용하고,
+ * 매크로 전환으로 explicit free list도 선택할 수 있도록 구성하였다.
+ * free block은 헤더와 푸터를 이용해 연결 여부를 판단하며, explicit 경로에서는
+ * payload 앞부분에 pred/succ 포인터를 저장한다. realloc은 가능하면 인접한
+ * free block을 재사용하고, 어려우면 새 블록을 할당한 뒤 payload를 복사한다.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,6 +56,14 @@ team_t team = {
 #define IMMEDIATE_COALESCING // 즉시 연결
 // #define DEFERRED_COALESCING // 지연 연결
 
+#if (defined(IMMEDIATE_COALESCING) + defined(DEFERRED_COALESCING)) != 1
+#error "IMMEDIATE_COALESCING와 DEFERRED_COALESCING 중 하나만 선택해야 합니다."
+#endif
+
+#ifdef DEFERRED_COALESCING
+#error "DEFERRED_COALESCING는 아직 지원하지 않습니다."
+#endif
+
 /********** 배치(place) 방식 정의 **********/
 // #define FIRSTFIT // 최초 적합
 // #define NEXTFIT // 다음 적합
@@ -75,6 +81,10 @@ team_t team = {
 // #define DEFAULT_REALLOC // 기본 제공 코드
 #define NEW_REALLOC
 
+#if (defined(DEFAULT_REALLOC) + defined(NEW_REALLOC)) != 1
+#error "DEFAULT_REALLOC와 NEW_REALLOC 중 하나만 선택해야 합니다."
+#endif
+
 /* single word (4) or double word (8) alignment */
 #define SINGLEWORD 4
 #define DOUBLEWORD 8
@@ -85,8 +95,6 @@ team_t team = {
 // 맨 마지막 3비트를 000으로 바꿈으로써 8의 배수로 만드는 원리
 // 001~111 8로 나눈 나머지 (1~7 사이) 값이 무시됨 => 그러니까 올림을 위해 8의 배수가 되지 않도록 8 직전인 7을 더하고 나머지를 버림
 #define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7) //##ALIGNMENT(8)의 배수로 맞춰주는 매크로, 바이트로 반환
-
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 /* 교재 9.43 매크로 코드 */
 #define WSIZE 4 // 1워드 (4바이트)
@@ -439,10 +447,6 @@ void *mm_malloc(size_t size)
     size_t extendsize; // 할당할 수 있는 힙의 크기가 부족한 경우
     char *bp; // 할당될 메모리 블록의 시작 주소를 담을 포인터
 
-#ifdef DEFERRED_COALESCING
-    // TODO: 메모리 할당 시 연결 방식 구현
-#endif
-
     if (size == 0)
         return NULL; // 요청한 크기가 없으면 NULL 반환
 
@@ -622,17 +626,27 @@ void *mm_realloc(void *bp, size_t size)
 #ifdef DEFAULT_REALLOC
     void *oldptr = bp;
     void *newptr;
+    size_t old_block_size;
     size_t copySize;
+
+    if (bp == NULL)
+        return mm_malloc(size);
+
+    if (size == 0) {
+        mm_free(bp);
+        return NULL;
+    }
 
     newptr = mm_malloc(size);
     if (newptr == NULL)
         return NULL;
 
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    old_block_size = GET_SIZE(HDRP(oldptr));
+    copySize = old_block_size - DSIZE;
     if (size < copySize)
         copySize = size;
 
-    memcpy(newptr, oldptr, copySize);
+    memmove(newptr, oldptr, copySize);
     mm_free(oldptr);
     return newptr;
 #endif
